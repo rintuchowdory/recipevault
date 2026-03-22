@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "/data/recipes.db"
+DB_PATH = os.environ.get("DB_PATH", "/tmp/recipes.db")
 
 # ── DB setup ──────────────────────────────────────────────────────────────────
 def get_db():
