@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #FDF8F0;
+    color: #3D2B1F;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #FDF8F0; }
+::-webkit-scrollbar-thumb { background: #C84B31; border-radius: 3px; }
+
+/* Card hover lift */
+.recipe-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.recipe-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(61, 43, 31, 0.15);
+}
