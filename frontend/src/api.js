@@ -12,10 +12,19 @@ const SEED_RECIPES = [
   { id:8, title:'Caesar Salad', category:'lunch', difficulty:'Easy', time_minutes:15, servings:2, likes:176, description:'Crisp romaine lettuce with homemade Caesar dressing and croutons.', image_url:'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400', ingredients:['1 romaine lettuce','Parmesan','Croutons','Caesar dressing','Lemon'], steps:['Wash and chop lettuce','Make dressing','Toss together','Top with croutons and cheese'], tags:['salad','classic','quick'] },
 ]
 
+// Normalize older records that stored the cook time as time_minutes
+function normalize(r) {
+  const { time_minutes, ...rest } = r
+  return time_minutes != null && rest.cook_time == null ? { ...rest, cook_time: time_minutes } : rest
+}
+
 function load() {
-  try { const d = localStorage.getItem(STORAGE_KEY); if (d) return JSON.parse(d) } catch {}
+  try {
+    const d = localStorage.getItem(STORAGE_KEY)
+    if (d) return JSON.parse(d).map(normalize)
+  } catch {}
   localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_RECIPES))
-  return SEED_RECIPES
+  return SEED_RECIPES.map(normalize)
 }
 function save(r) { localStorage.setItem(STORAGE_KEY, JSON.stringify(r)) }
 const ok = d => Promise.resolve(d)
@@ -33,4 +42,32 @@ export const api = {
   likeRecipe: id => { const r = load().map(x => x.id===Number(id)?{...x,likes:(x.likes||0)+1}:x); save(r); return ok(r.find(x=>x.id===Number(id))) },
   deleteRecipe: id => { save(load().filter(r => r.id !== Number(id))); return ok({success:true}) },
   getCategories: () => ok(['breakfast','lunch','dinner','dessert']),
+}
+
+// ── Shopping list (separate localStorage key) ────────────────────────────────
+const LIST_KEY = 'recipevault_shopping'
+
+function loadList() {
+  try { return JSON.parse(localStorage.getItem(LIST_KEY)) || [] } catch { return [] }
+}
+function saveList(l) { localStorage.setItem(LIST_KEY, JSON.stringify(l)) }
+
+export const shopping = {
+  get: loadList,
+  addFromRecipe: (recipe) => {
+    const list = loadList()
+    let added = 0
+    for (const item of recipe.ingredients || []) {
+      if (!list.some(x => x.name === item)) { list.push({ name: item, done: false, from: recipe.title }); added++ }
+    }
+    saveList(list)
+    return { list, added }
+  },
+  toggle: (name) => {
+    const list = loadList().map(x => x.name === name ? { ...x, done: !x.done } : x)
+    saveList(list); return list
+  },
+  remove: (name) => { const l = loadList().filter(x => x.name !== name); saveList(l); return l },
+  clearDone: () => { const l = loadList().filter(x => !x.done); saveList(l); return l },
+  clearAll: () => { saveList([]); return [] },
 }

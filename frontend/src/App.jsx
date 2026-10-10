@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, Clock, Users, ChefHat, Heart, Plus, X,
+  Search, Clock, Users, ChefHat, Heart, Plus, X, Check,
   ArrowLeft, Flame, Leaf, Coffee, Moon, Sun, Trash2
 } from 'lucide-react'
-import { api } from './api.js'
+import { api, shopping } from './api.js'
+import CookMode from './CookMode.jsx'
+import { ListChecks, ShoppingCart, CookingPot } from 'lucide-react'
 
 // ── Difficulty badge ──────────────────────────────────────────────────────────
 const difficultyColor = {
@@ -108,9 +110,18 @@ function RecipeCard({ recipe, onClick, onLike, onDelete }) {
 }
 
 // ── Recipe Detail Modal ───────────────────────────────────────────────────────
-function RecipeDetail({ recipe, onClose, onLike }) {
+function RecipeDetail({ recipe, onClose, onLike, onCook, onAddToList }) {
   const [liked, setLiked] = useState(false)
   const [likes, setLikes] = useState(recipe.likes)
+  const [listToast, setListToast] = useState('')
+  const [toastTimer, setToastTimer] = useState(null)
+
+  const handleAddToList = () => {
+    const { added } = onAddToList(recipe)
+    setListToast(added > 0 ? `Added ${added} ingredient${added === 1 ? '' : 's'} to your shopping list` : 'All ingredients are already on your list')
+    clearTimeout(toastTimer)
+    setToastTimer(setTimeout(() => setListToast(''), 2500))
+  }
 
   const handleLike = async () => {
     if (liked) return
@@ -215,6 +226,21 @@ function RecipeDetail({ recipe, onClose, onLike }) {
                 </span>
               ))}
             </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button onClick={() => onCook(recipe)}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-spice text-white rounded-xl font-semibold hover:bg-spice/90 active:scale-95 transition-all">
+              <CookingPot size={17} /> Start cooking
+            </button>
+            <button onClick={handleAddToList}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-bark text-cream rounded-xl font-semibold hover:bg-bark/90 active:scale-95 transition-all">
+              <ShoppingCart size={17} /> Add to shopping list
+            </button>
+          </div>
+          {listToast && (
+            <p className="text-center text-xs text-sage font-medium">{listToast}</p>
           )}
         </div>
       </motion.div>
@@ -344,6 +370,90 @@ function AddRecipeModal({ onClose, onAdd }) {
   )
 }
 
+// ── Shopping List Drawer ──────────────────────────────────────────────────────
+function ShoppingList({ open, onClose }) {
+  const [items, setItems] = useState([])
+  useEffect(() => { if (open) setItems(shopping.get()) }, [open])
+
+  const refresh = (list) => setItems(list)
+  const remaining = items.filter(i => !i.done).length
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 bg-bark/40 backdrop-blur-sm"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+            transition={{ type: 'tween', duration: 0.25 }}
+            className="absolute right-0 top-0 h-full w-full max-w-sm bg-cream flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-bark/10">
+              <div className="flex items-center gap-2">
+                <ListChecks size={20} className="text-spice" />
+                <h2 className="font-display text-xl font-bold text-bark">Shopping List</h2>
+              </div>
+              <button onClick={onClose} className="p-2 hover:bg-bark/10 rounded-full transition-all">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1">
+              {items.length === 0 ? (
+                <div className="text-center py-20 text-bark/40">
+                  <div className="text-5xl mb-3">🛒</div>
+                  <p className="font-display text-xl">Nothing here yet</p>
+                  <p className="text-xs mt-1">Open a recipe and tap "Add to shopping list".</p>
+                </div>
+              ) : items.map(item => (
+                <motion.div key={item.name} layout
+                  initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center gap-3 bg-white rounded-xl px-3 py-2.5 border border-bark/10">
+                  <button
+                    onClick={() => refresh(shopping.toggle(item.name))}
+                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all
+                      ${item.done ? 'bg-sage border-sage' : 'border-bark/20 hover:border-spice'}`}
+                    aria-label={item.done ? `Mark ${item.name} as needed` : `Mark ${item.name} as bought`}>
+                    {item.done && <Check size={12} className="text-bark" />}
+                  </button>
+                  <span className={`flex-1 text-sm ${item.done ? 'text-bark/40 line-through' : 'text-bark/80'}`}>
+                    {item.name}
+                  </span>
+                  {item.from && <span className="text-[10px] text-bark/30 truncate max-w-[90px]">{item.from}</span>}
+                  <button
+                    onClick={() => refresh(shopping.remove(item.name))}
+                    className="text-bark/25 hover:text-spice transition-all"
+                    aria-label={`Remove ${item.name}`}>
+                    <Trash2 size={13} />
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+
+            {items.length > 0 && (
+              <div className="px-5 py-4 border-t border-bark/10 flex items-center gap-2">
+                <span className="text-xs text-bark/50 mr-auto">{remaining} to buy · {items.length - remaining} done</span>
+                <button onClick={() => refresh(shopping.clearDone())}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-bark/10 text-bark/60 hover:border-spice/40 transition-all">
+                  Clear done
+                </button>
+                <button onClick={() => refresh(shopping.clearAll())}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-spice/10 text-spice hover:bg-spice/20 transition-all">
+                  Clear all
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [recipes, setRecipes]       = useState([])
@@ -352,7 +462,12 @@ export default function App() {
   const [category, setCategory]     = useState('all')
   const [difficulty, setDifficulty] = useState('')
   const [selected, setSelected]     = useState(null)
+  const [cooking, setCooking]       = useState(null)
   const [showAdd, setShowAdd]       = useState(false)
+  const [showList, setShowList]     = useState(false)
+  const [listCount, setListCount]   = useState(0)
+
+  useEffect(() => { setListCount(shopping.get().length) }, [showList, cooking])
   const categories = ['all','breakfast','lunch','dinner','dessert']
 
   const load = useCallback(async () => {
@@ -404,10 +519,22 @@ export default function App() {
             />
           </div>
 
-          <button onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-spice text-white rounded-xl text-sm font-semibold hover:bg-spice/90 active:scale-95 transition-all">
-            <Plus size={16} /> Add Recipe
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowList(true)}
+              className="relative flex items-center gap-2 px-3 py-2 bg-white border border-bark/15 rounded-xl text-sm font-medium text-bark/70 hover:border-spice/40 transition-all"
+              aria-label="Open shopping list">
+              <ListChecks size={16} />
+              {listCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-spice text-white text-[10px] font-bold flex items-center justify-center">
+                  {listCount}
+                </span>
+              )}
+            </button>
+            <button onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-spice text-white rounded-xl text-sm font-semibold hover:bg-spice/90 active:scale-95 transition-all">
+              <Plus size={16} /> Add Recipe
+            </button>
+          </div>
         </div>
 
         {/* Category tabs */}
@@ -488,8 +615,14 @@ export default function App() {
             recipe={selected}
             onClose={() => setSelected(null)}
             onLike={api.likeRecipe}
+            onCook={(r) => { setCooking(r); setSelected(null) }}
+            onAddToList={shopping.addFromRecipe}
           />
         )}
+        {cooking && (
+          <CookMode recipe={cooking} onClose={() => setCooking(null)} />
+        )}
+        <ShoppingList open={showList} onClose={() => setShowList(false)} />
         {showAdd && (
           <AddRecipeModal
             onClose={() => setShowAdd(false)}
@@ -500,7 +633,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-bark/10 py-6 text-center text-bark/30 text-xs">
-        RecipeVault — Built with React + FastAPI + Docker 🐳
+        RecipeVault — React + localStorage, your recipes stay on your device 🔒
       </footer>
     </div>
   )
